@@ -1,56 +1,66 @@
+const { AuthenticationError } = require("apollo-server-express");
+const { signToken } = require("../utils/auth");
 const User = require("../models/User");
-const { signToken, AuthenticationError } = require("../utils/auth");
+const Comment = require("../models/Comment");
 
 const resolvers = {
   Query: {
-    me: async (parent, args, context) => {
-      if (!context.user) {
+    me: async (_, __, { user }) => {
+      if (!user) {
         throw new AuthenticationError("You must be logged in");
       }
-
-      return await User.findById(context.user.id);
+      return User.findById(user.id);
     },
   },
   Mutation: {
-    //Every resolver function can accept up to four arguments:
-    // (parent, args, context, info)
-    //Context is accessible due to server.js configuration
-    addUser: async (parent, args, context) => {
-      const user = await User.create(args);
-      const token = signToken(user);
-      // Create session data when account is created: Context is established in server.js
-      if (context.session) {
-        context.session.userId = user._id;
-        context.session.username = user.username;
-      }
-      //Add additional session properties here
+    addUser: async (_, { username, email, password }, { session }) => {
+      const newUser = await User.create({ username, email, password });
+      const token = signToken(newUser);
 
-      return { token, user };
+      if (session) {
+        session.userId = newUser._id;
+        session.username = newUser.username;
+        session.save();
+      }
+
+      return { token, user: newUser };
     },
 
-    login: async (parent, { email, password }, context) => {
-      const user = await User.findOne({ email });
-      console.log(user);
+    addComment: async (_, { content, rating }, { user }) => {
       if (!user) {
-        console.log(user);
+        throw new AuthenticationError("You must be logged in to add a comment");
+      }
+
+      const comment = await Comment.create({
+        content,
+        timestamp: new Date().toISOString(),
+        user: user.id,
+        rating,
+      });
+
+      return comment;
+    },
+
+    login: async (_, { email, password }, { session }) => {
+      const user = await User.findOne({ email });
+
+      if (!user) {
         throw new AuthenticationError("No user found with this email address");
       }
 
       const correctPassword = await user.isCorrectPassword(password);
+
       if (!correctPassword) {
         throw new AuthenticationError("Incorrect credentials");
       }
 
       const token = signToken(user);
-      //Data for session accessible due to context:
 
-      context.session.userId = user._id;
-      context.session.username = user.username;
-
-      //Add additional session properties here when needed
-      //Cart data
-      //Navigation History for enabling recently viewed items, etc.
-      //User Preferences
+      if (session) {
+        session.userId = user._id;
+        session.username = user.username;
+        session.save();
+      }
 
       return { token, user };
     },

@@ -1,40 +1,38 @@
-const { ApolloError } = require("@apollo/server");
 const jwt = require("jsonwebtoken");
+const { GraphQLError } = require("graphql");
 
 const secret = process.env.SECRET;
 const expiration = "2h";
-console.log(secret, "This is the secret");
-module.exports = {
-  authMiddleware({ req }) {
-    let token = req.body.token || req.query.token || req.headers.authorization;
 
-    if (req.headers.authorization) {
-      token = token.split(" ").pop().trim();
-    }
+// This function is now designed to be directly used with Apollo Server's context function
+const authMiddleware = async ({ req }) => {
+  let user = null;
+  const token = req.headers.authorization
+    ? req.headers.authorization.split(" ").pop().trim()
+    : null;
 
-    if (!token) {
-      console.log("No token found");
-      return req;
-    }
-
+  if (token) {
     try {
-      const { data } = jwt.verify(token, secret, { expiresIn: expiration });
-      req.user = data;
+      const decoded = jwt.verify(token, secret, { expiresIn: expiration });
+      user = decoded.data; // Assuming the decoded token structure has a data field
     } catch (err) {
-      console.error("Invalid token:", err);
-      console.log("Invalid token");
-      req.user = null;
-      throw new ApolloError(
-        "Could not authenticate user. Invalid or expired token.",
-        "UNAUTHENTICATED"
-      );
+      console.error("Error verifying token:", err);
+      // Depending on your application's requirements, you might want to throw an error
+      // or simply log it and proceed without a user in the context
+      throw new GraphQLError("Invalid or expired token.", {
+        extensions: {
+          code: "UNAUTHENTICATED",
+          // You can add more details relevant to the authentication error
+        },
+      });
     }
+  }
 
-    return req;
-  },
-  signToken({ username, email, _id }) {
-    const payload = { username, email, _id };
-    console.log("payload", payload);
-    return jwt.sign({ data: payload }, secret, { expiresIn: expiration });
-  },
+  return { user }; // This user object will be available in the Apollo Server context
+};
+
+module.exports = {
+  authMiddleware,
+  signToken: (userData) =>
+    jwt.sign({ data: userData }, secret, { expiresIn: expiration }),
 };

@@ -11,15 +11,18 @@ export const Signup = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    +console.log("Signup attempted with", { username, email, password });
     try {
       const { data } = await addUser({
         variables: { username, email, password },
       });
-      console.log(data);
+      +console.log("Signup successful with data:", data);
+      -console.log(data);
       // Handle success here, for example by redirecting the user or showing a success message
     } catch (err) {
       console.error("Signup error", err);
-      console.log(err);
+      +console.log("Signup error details:", err);
+      -console.log(err);
       // Handle the error more gracefully, show user-friendly error messages
     }
   };
@@ -46,7 +49,7 @@ export const Signup = () => {
       />
       <button type="submit">Signup</button>
       {loading && <p>Loading...</p>}
-      {error && <p>Error :( Please try again</p>}
+      {error && <p>Error: Please try again</p>}
     </form>
   );
 };
